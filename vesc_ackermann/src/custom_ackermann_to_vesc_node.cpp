@@ -23,39 +23,19 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY
 // WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-// -*- mode:c++; fill-column: 100; -*-
-
-#ifndef VESC_ACKERMANN_ACKERMANN_TO_VESC_H_
-#define VESC_ACKERMANN_ACKERMANN_TO_VESC_H_
-
 #include <ros/ros.h>
-#include <ackermann_msgs/AckermannDriveStamped.h>
 
-namespace vesc_ackermann
+#include "vesc_ackermann/custom_ackermann_to_vesc.h"
+
+int main(int argc, char** argv)
 {
+  ros::init(argc, argv, "ackermann_to_vesc_node");
+  ros::NodeHandle nh;
+  ros::NodeHandle private_nh("~");
 
-class AckermannToVesc
-{
-public:
-  AckermannToVesc(ros::NodeHandle nh, ros::NodeHandle private_nh);
+  vesc_ackermann::AckermannToVesc ackermann_to_vesc(nh, private_nh);
 
-private:
-  // ROS parameters
-  // conversion gain and offset
-  double speed_to_erpm_gain_, speed_to_erpm_offset_;
-  double steering_to_servo_gain_, steering_to_servo_offset_;
+  ros::spin();
 
-  /** @todo consider also providing an interpolated look-up table conversion */
-
-  // ROS services
-  ros::Publisher erpm_pub_;
-  ros::Publisher servo_pub_;
-  ros::Subscriber ackermann_sub_;
-
-  // ROS callbacks
-  void ackermannCmdCallback(const ackermann_msgs::AckermannDriveStamped::ConstPtr& cmd);
-};
-
-}  // namespace vesc_ackermann
-
-#endif  // VESC_ACKERMANN_ACKERMANN_TO_VESC_H_
+  return 0;
+}

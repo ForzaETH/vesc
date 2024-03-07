@@ -34,11 +34,14 @@
 #include <string>
 
 #include <vesc_msgs/VescStateStamped.h>
+#include <vesc_msgs/VescImuStamped.h>
+
 
 namespace vesc_driver
 {
 
 using std::placeholders::_1;
+using sensor_msgs::Imu;
 
 VescDriver::VescDriver(ros::NodeHandle nh,
                        ros::NodeHandle private_nh) :
@@ -73,6 +76,8 @@ VescDriver::VescDriver(ros::NodeHandle nh,
 
   // create vesc state (telemetry) publisher
   state_pub_ = nh.advertise<vesc_msgs::VescStateStamped>("sensors/core", 10);
+  imu_pub_ = nh.advertise<vesc_msgs::VescImuStamped>("sensors/imu", 10);
+  imu_std_pub_ = nh.advertise<Imu>("sensors/imu/raw", 10);
 
   // since vesc state does not include the servo position, publish the commanded
   // servo position as a "sensor"
@@ -135,6 +140,8 @@ void VescDriver::timerCallback(const ros::TimerEvent& event)
   {
     // poll for vesc state (telemetry)
     vesc_.requestState();
+    // poll for vesc imu
+    vesc_.requestImuData();
   }
   else
   {
@@ -176,6 +183,53 @@ void VescDriver::vescPacketCallback(const std::shared_ptr<VescPacket const>& pac
     fw_version_major_ = fw_version->fwMajor();
     fw_version_minor_ = fw_version->fwMinor();
   }
+  else if (packet->name() == "ImuData") {
+    std::shared_ptr<VescPacketImu const> imuData = std::dynamic_pointer_cast<VescPacketImu const>(packet);
+
+    vesc_msgs::VescImuStamped::Ptr imu_msg(new vesc_msgs::VescImuStamped);
+    imu_msg->header.stamp = ros::Time::now();
+    imu_msg->header.frame_id = "imu";
+    sensor_msgs::Imu::Ptr std_imu_msg(new Imu);
+    std_imu_msg->header.stamp = ros::Time::now();
+    std_imu_msg->header.frame_id = "imu";
+
+    imu_msg->imu.ypr.x = imuData->roll();
+    imu_msg->imu.ypr.y = imuData->pitch();
+    imu_msg->imu.ypr.z = imuData->yaw();
+
+    imu_msg->imu.linear_acceleration.x = imuData->acc_x();
+    imu_msg->imu.linear_acceleration.y = imuData->acc_y();
+    imu_msg->imu.linear_acceleration.z = imuData->acc_z();
+
+    imu_msg->imu.angular_velocity.x = imuData->gyr_x();
+    imu_msg->imu.angular_velocity.y = imuData->gyr_y();
+    imu_msg->imu.angular_velocity.z = imuData->gyr_z();
+
+    imu_msg->imu.compass.x = imuData->mag_x();
+    imu_msg->imu.compass.y = imuData->mag_y();
+    imu_msg->imu.compass.z = imuData->mag_z();
+
+    imu_msg->imu.orientation.w = imuData->q_y();
+    imu_msg->imu.orientation.x = imuData->q_x();
+    imu_msg->imu.orientation.y = imuData->q_z();
+    imu_msg->imu.orientation.z = imuData->q_w();
+
+    std_imu_msg->linear_acceleration.x = 9.806 * imuData->acc_x();
+    std_imu_msg->linear_acceleration.y = 9.806 * imuData->acc_y();
+    std_imu_msg->linear_acceleration.z = 9.806 * imuData->acc_z();
+
+    std_imu_msg->angular_velocity.x = M_PI / 180 * imuData->gyr_x();
+    std_imu_msg->angular_velocity.y = M_PI / 180 * imuData->gyr_y();
+    std_imu_msg->angular_velocity.z = M_PI / 180 * imuData->gyr_z();
+
+    std_imu_msg->orientation.w = imuData->q_w();
+    std_imu_msg->orientation.x = imuData->q_x();
+    std_imu_msg->orientation.y = imuData->q_y();
+    std_imu_msg->orientation.z = imuData->q_z();
+    
+    imu_pub_.publish(imu_msg);
+    imu_std_pub_.publish(std_imu_msg);
+  }
 }
 
 void VescDriver::vescErrorCallback(const std::string& error)
@@ -190,7 +244,7 @@ void VescDriver::vescErrorCallback(const std::string& error)
  */
 void VescDriver::dutyCycleCallback(const std_msgs::Float64::ConstPtr& duty_cycle)
 {
-  if (driver_mode_ == MODE_OPERATING)
+  if (driver_mode_ = MODE_OPERATING)
   {
     vesc_.setDutyCycle(duty_cycle_limit_.clip(duty_cycle->data));
   }
@@ -203,7 +257,7 @@ void VescDriver::dutyCycleCallback(const std_msgs::Float64::ConstPtr& duty_cycle
  */
 void VescDriver::currentCallback(const std_msgs::Float64::ConstPtr& current)
 {
-  if (driver_mode_ == MODE_OPERATING)
+  if (driver_mode_ = MODE_OPERATING)
   {
     vesc_.setCurrent(current_limit_.clip(current->data));
   }
@@ -216,7 +270,7 @@ void VescDriver::currentCallback(const std_msgs::Float64::ConstPtr& current)
  */
 void VescDriver::brakeCallback(const std_msgs::Float64::ConstPtr& brake)
 {
-  if (driver_mode_ == MODE_OPERATING)
+  if (driver_mode_ = MODE_OPERATING)
   {
     vesc_.setBrake(brake_limit_.clip(brake->data));
   }
@@ -230,7 +284,7 @@ void VescDriver::brakeCallback(const std_msgs::Float64::ConstPtr& brake)
  */
 void VescDriver::speedCallback(const std_msgs::Float64::ConstPtr& speed)
 {
-  if (driver_mode_ == MODE_OPERATING)
+  if (driver_mode_ = MODE_OPERATING)
   {
     vesc_.setSpeed(speed_limit_.clip(speed->data));
   }
@@ -242,7 +296,7 @@ void VescDriver::speedCallback(const std_msgs::Float64::ConstPtr& speed)
  */
 void VescDriver::positionCallback(const std_msgs::Float64::ConstPtr& position)
 {
-  if (driver_mode_ == MODE_OPERATING)
+  if (driver_mode_ = MODE_OPERATING)
   {
     // ROS uses radians but VESC seems to use degrees. Convert to degrees.
     double position_deg = position_limit_.clip(position->data) * 180.0 / M_PI;
@@ -255,7 +309,7 @@ void VescDriver::positionCallback(const std_msgs::Float64::ConstPtr& position)
  */
 void VescDriver::servoCallback(const std_msgs::Float64::ConstPtr& servo)
 {
-  if (driver_mode_ == MODE_OPERATING)
+  if (driver_mode_ = MODE_OPERATING)
   {
     double servo_clipped(servo_limit_.clip(servo->data));
     vesc_.setServo(servo_clipped);

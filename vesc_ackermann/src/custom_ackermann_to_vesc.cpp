@@ -25,7 +25,7 @@
 
 // -*- mode:c++; fill-column: 100; -*-
 
-#include "vesc_ackermann/ackermann_to_vesc.h"
+#include "vesc_ackermann/custom_ackermann_to_vesc.h"
 
 #include <cmath>
 #include <sstream>
@@ -50,31 +50,83 @@ AckermannToVesc::AckermannToVesc(ros::NodeHandle nh, ros::NodeHandle private_nh)
     return;
   if (!getRequiredParam(nh, "steering_angle_to_servo_offset", &steering_to_servo_offset_))
     return;
+  if (!getRequiredParam(nh, "acceleration_to_current_gain", &acceleration_to_current_gain_))
+    return;
+  if (!getRequiredParam(nh, "deceleration_to_current_gain", &deceleration_to_current_gain_))
+    return;
+  if (!getRequiredParam(nh, "velocity_to_current_gain", &velocity_to_current_gain_))
+    return;
 
   // create publishers to vesc electric-RPM (speed) and servo commands
   erpm_pub_ = nh.advertise<std_msgs::Float64>("commands/motor/speed", 10);
+  current_pub_ = nh.advertise<std_msgs::Float64>("commands/motor/current", 10);
+  brake_pub_ = nh.advertise<std_msgs::Float64>("commands/motor/brake", 10);
   servo_pub_ = nh.advertise<std_msgs::Float64>("commands/servo/position", 10);
 
   // subscribe to ackermann topic
   ackermann_sub_ = nh.subscribe("ackermann_cmd", 10, &AckermannToVesc::ackermannCmdCallback, this);
+
+  // subscribe to odometry topic
+  odom_sub_ = nh.subscribe("odom", 10, &AckermannToVesc::odomCallback, this);
+  linear_velocity_x_ = 0;
+}
+
+typedef nav_msgs::Odometry::ConstPtr OdomMsgPtr;
+void AckermannToVesc::odomCallback(const OdomMsgPtr& msg)
+{
+  linear_velocity_x_ = msg->twist.twist.linear.x;
+
+  // add deadzone in order to not react to noise in odom:
+  if ( abs(linear_velocity_x_) < 0.3 ) {
+    linear_velocity_x_ = 0;
+  }
 }
 
 typedef ackermann_msgs::AckermannDriveStamped::ConstPtr AckermannMsgPtr;
 void AckermannToVesc::ackermannCmdCallback(const AckermannMsgPtr& cmd)
 {
-  // calc vesc electric RPM (speed)
-  std_msgs::Float64::Ptr erpm_msg(new std_msgs::Float64);
-  erpm_msg->data = speed_to_erpm_gain_ * cmd->drive.speed + speed_to_erpm_offset_;
-
   // calc steering angle (servo)
   std_msgs::Float64::Ptr servo_msg(new std_msgs::Float64);
   servo_msg->data = steering_to_servo_gain_ * cmd->drive.steering_angle + steering_to_servo_offset_;
 
-  // publish
-  if (ros::ok())
-  {
-    erpm_pub_.publish(erpm_msg);
-    servo_pub_.publish(servo_msg);
+  // abuse jerk to indicate whether we should follow acceleration commands or not 
+  // (hacky but avoids needing new message type - TODO replace this by bitmask in custom ackermann message)
+  if (cmd->drive.jerk == 512) {
+    // interpret acceleration as commands and map them to current commands to the motor (directly)
+    if (cmd->drive.acceleration >= 0) {
+      // calc current command (motor)
+      std_msgs::Float64::Ptr current_msg(new std_msgs::Float64);
+      current_msg->data = acceleration_to_current_gain_ * cmd->drive.acceleration
+          + velocity_to_current_gain_ * linear_velocity_x_;
+
+      // publish
+      if (ros::ok()) {
+        current_pub_.publish(current_msg);
+        servo_pub_.publish(servo_msg);
+      }
+    } else {
+      // calc brake command (motor)
+      std_msgs::Float64::Ptr brake_msg(new std_msgs::Float64);
+      brake_msg->data = -(deceleration_to_current_gain_ * cmd->drive.acceleration
+        + velocity_to_current_gain_ * linear_velocity_x_);
+
+      // publish
+      if (ros::ok()) {
+        brake_pub_.publish(brake_msg);
+        servo_pub_.publish(servo_msg);
+      }
+    }
+  } else {
+     // calc vesc electric RPM (speed)
+    std_msgs::Float64::Ptr erpm_msg(new std_msgs::Float64);
+    erpm_msg->data = speed_to_erpm_gain_ * cmd->drive.speed + speed_to_erpm_offset_;
+
+    // publish
+    if (ros::ok())
+    {
+      erpm_pub_.publish(erpm_msg);
+      servo_pub_.publish(servo_msg);
+    }
   }
 }
 

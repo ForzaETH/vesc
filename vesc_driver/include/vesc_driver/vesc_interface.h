@@ -118,6 +118,7 @@ public:
   void setSpeed(double speed);
   void setPosition(double position);
   void setServo(double servo);
+  void requestImuData();
 
 private:
   // Pimpl - hide serial port members from class users

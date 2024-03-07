@@ -34,12 +34,14 @@
 #include <ros/ros.h>
 #include <std_msgs/Float64.h>
 #include <boost/optional.hpp>
+#include <sensor_msgs/Imu.h>
 
 #include "vesc_driver/vesc_interface.h"
 #include "vesc_driver/vesc_packet.h"
 
 namespace vesc_driver
 {
+using sensor_msgs::Imu;
 
 class VescDriver
 {
@@ -73,6 +75,8 @@ private:
 
   // ROS services
   ros::Publisher state_pub_;
+  ros::Publisher imu_pub_;
+  ros::Publisher imu_std_pub_;
   ros::Publisher servo_sensor_pub_;
   ros::Subscriber duty_cycle_sub_;
   ros::Subscriber current_sub_;

@@ -19,6 +19,7 @@ find_package(catkin REQUIRED COMPONENTS
   roslint
   serial
   std_msgs
+  sensor_msgs
   vesc_msgs
 )
 
@@ -28,6 +29,7 @@ catkin_package(
     nodelet
     pluginlib
     std_msgs
+    sensor_msgs
     vesc_msgs serial
 )
 

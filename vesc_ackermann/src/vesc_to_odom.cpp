@@ -47,29 +47,37 @@ using vesc_msgs::msg::VescStateStamped;
 
 VescToOdom::VescToOdom(const rclcpp::NodeOptions & options)
 : Node("vesc_to_odom_node", options),
-  odom_frame_("odom"),
-  base_frame_("base_link"),
-  use_servo_cmd_(true),
-  publish_tf_(false),
   x_(0.0),
   y_(0.0),
   yaw_(0.0)
 {
-  // get ROS parameters
-  odom_frame_ = declare_parameter("odom_frame", odom_frame_);
-  base_frame_ = declare_parameter("base_frame", base_frame_);
-  use_servo_cmd_ = declare_parameter("use_servo_cmd_to_calc_angular_velocity", use_servo_cmd_);
+  // declare default ROS parameters
+  declare_parameter("odom_frame", "odom");
+  declare_parameter("base_frame", "base_link");
+  declare_parameter("use_servo_cmd_to_calc_angular_velocity", true);
+  declare_parameter("speed_to_erpm_gain", 1.0);
+  declare_parameter("speed_to_erpm_offset", 0.0);
+  declare_parameter("steering_angle_to_servo_gain", 1.0);
+  declare_parameter("steering_angle_to_servo_offset", 0.0);
+  declare_parameter("wheelbase", 0.2);
+  declare_parameter("publish_tf", false);
 
-  speed_to_erpm_gain_ = declare_parameter("speed_to_erpm_gain").get<double>();
-  speed_to_erpm_offset_ = declare_parameter("speed_to_erpm_offset").get<double>();
+
+  // get ROS parameters
+  get_parameter("odom_frame", odom_frame_);
+  get_parameter("base_frame", base_frame_);
+  get_parameter("use_servo_cmd_to_calc_angular_velocity", use_servo_cmd_);
+
+  get_parameter("speed_to_erpm_gain", speed_to_erpm_gain_);
+  get_parameter("speed_to_erpm_offset", speed_to_erpm_offset_);
 
   if (use_servo_cmd_) {
-    steering_to_servo_gain_ = declare_parameter("steering_angle_to_servo_gain").get<double>();
-    steering_to_servo_offset_ = declare_parameter("steering_angle_to_servo_offset").get<double>();
-    wheelbase_ = declare_parameter("wheelbase").get<double>();
+    get_parameter("steering_angle_to_servo_gain", steering_to_servo_gain_);
+    get_parameter("steering_angle_to_servo_offset", steering_to_servo_offset_);
+    get_parameter("wheelbase", wheelbase_);
   }
 
-  publish_tf_ = declare_parameter("publish_tf", publish_tf_);
+  get_parameter("publish_tf", publish_tf_);
 
   // create odom publisher
   odom_pub_ = create_publisher<Odometry>("odom", 10);
@@ -97,7 +105,7 @@ void VescToOdom::vescStateCallback(const VescStateStamped::SharedPtr state)
   }
 
   // convert to engineering units
-  double current_speed = (-state->state.speed - speed_to_erpm_offset_) / speed_to_erpm_gain_;
+  double current_speed = (state->state.speed - speed_to_erpm_offset_) / speed_to_erpm_gain_;
   if (std::fabs(current_speed) < 0.05) {
     current_speed = 0.0;
   }

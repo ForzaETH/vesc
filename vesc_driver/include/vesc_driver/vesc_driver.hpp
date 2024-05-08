@@ -63,6 +63,7 @@ public:
 private:
   // interface to the VESC
   VescInterface vesc_;
+  const float g_ = 9.81f;  // Gravity of Earth in m/s²
   void vescPacketCallback(const std::shared_ptr<VescPacket const> & packet);
   void vescErrorCallback(const std::string & error);
 

@@ -1,8 +1,8 @@
-# Veddar VESC Interface
+# Vedder VESC Interface
 
 ![ROS2 CI Workflow](https://github.com/f1tenth/vesc/workflows/ROS2%20CI%20Workflow/badge.svg)
 
-Packages to interface with Veddar VESC motor controllers. See https://vesc-project.com/ for details
+Packages to interface with Vedder VESC motor controllers. See https://vesc-project.com/ for details
 
 This is a ROS2 implementation of the ROS1 driver using the new serial driver located in [transport drivers](https://github.com/ros-drivers/transport_drivers).
 

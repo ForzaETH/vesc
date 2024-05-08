@@ -14,6 +14,6 @@
     <param name="steering_angle_to_servo_gain" value="1.0" />
     <param name="steering_angle_to_servo_offset" value="0.0" />
     <param name="wheelbase" value="0.2" />
-    <param name="publish_tf" value="true" />
+    <param name="publish_tf" value="false" />
   </node>
 </launch>

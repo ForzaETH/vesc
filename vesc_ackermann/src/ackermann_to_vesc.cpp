@@ -52,6 +52,8 @@ AckermannToVesc::AckermannToVesc(const rclcpp::NodeOptions & options)
   declare_parameter("speed_to_erpm_offset", 1.0);
   declare_parameter("steering_angle_to_servo_gain", 1.0);
   declare_parameter("steering_angle_to_servo_offset", 1.0);
+  const auto ackermann_input_topic = declare_parameter<std::string>(
+    "ackermann_input_topic", "ackermann_cmd");
   const auto motor_output_topic = declare_parameter<std::string>(
     "motor_output_topic", "commands/motor/speed");
   const auto servo_output_topic = declare_parameter<std::string>(
@@ -68,14 +70,17 @@ AckermannToVesc::AckermannToVesc(const rclcpp::NodeOptions & options)
 
   // subscribe to ackermann topic
   ackermann_sub_ = create_subscription<AckermannDriveStamped>(
-    "ackermann_cmd", 10, std::bind(&AckermannToVesc::ackermannCmdCallback, this, _1));
+    ackermann_input_topic, 10, std::bind(&AckermannToVesc::ackermannCmdCallback, this, _1));
 }
 
 void AckermannToVesc::ackermannCmdCallback(const AckermannDriveStamped::SharedPtr cmd)
 {
   // calc vesc electric RPM (speed)
   Float64 erpm_msg;
-  erpm_msg.data = speed_to_erpm_gain_ * cmd->drive.speed + speed_to_erpm_offset_;
+  // Zero is the explicit safe motor command. Applying a calibration offset at
+  // standstill could otherwise make a disabled car receive a nonzero ERPM.
+  erpm_msg.data = cmd->drive.speed == 0.0 ? 0.0 :
+    speed_to_erpm_gain_ * cmd->drive.speed + speed_to_erpm_offset_;
 
   // calc steering angle (servo)
   Float64 servo_msg;

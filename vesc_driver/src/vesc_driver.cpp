@@ -38,6 +38,7 @@
 #include <cmath>
 #include <memory>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 
 namespace vesc_driver
@@ -67,6 +68,16 @@ VescDriver::VescDriver(const rclcpp::NodeOptions & options)
 {
   // get vesc serial port address
   std::string port = declare_parameter<std::string>("port", "");
+  const double command_timeout = declare_parameter<double>("command_timeout", 0.2);
+  safe_servo_position_ = declare_parameter<double>("steering_angle_to_servo_offset", 0.5);
+  if (!std::isfinite(command_timeout) || command_timeout <= 0.0) {
+    throw std::invalid_argument("command_timeout must be finite and positive");
+  }
+  if (!std::isfinite(safe_servo_position_)) {
+    throw std::invalid_argument("steering_angle_to_servo_offset must be finite");
+  }
+  command_timeout_ = std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+    std::chrono::duration<double>(command_timeout));
 
   // attempt to connect to the serial port
   try {
@@ -144,6 +155,7 @@ void VescDriver::timerCallback()
       driver_mode_ = MODE_OPERATING;
     }
   } else if (driver_mode_ == MODE_OPERATING) {
+    checkCommandWatchdogs();
     // poll for vesc state (telemetry)
     vesc_.requestState();
     // poll for vesc imu
@@ -315,7 +327,17 @@ void VescDriver::brakeCallback(const Float64::SharedPtr brake)
 void VescDriver::speedCallback(const Float64::SharedPtr speed)
 {
   if (driver_mode_ == MODE_OPERATING) {
+    if (!std::isfinite(speed->data)) {
+      RCLCPP_ERROR(get_logger(), "Ignoring non-finite speed command.");
+      return;
+    }
     vesc_.setSpeed(speed_limit_.clip(speed->data));
+    last_speed_command_time_ = std::chrono::steady_clock::now();
+    speed_command_received_ = true;
+    if (speed_watchdog_active_) {
+      speed_watchdog_active_ = false;
+      RCLCPP_INFO(get_logger(), "Motor command stream recovered.");
+    }
   }
 }
 
@@ -338,12 +360,46 @@ void VescDriver::positionCallback(const Float64::SharedPtr position)
 void VescDriver::servoCallback(const Float64::SharedPtr servo)
 {
   if (driver_mode_ == MODE_OPERATING) {
+    if (!std::isfinite(servo->data)) {
+      RCLCPP_ERROR(get_logger(), "Ignoring non-finite servo command.");
+      return;
+    }
     double servo_clipped(servo_limit_.clip(servo->data));
     vesc_.setServo(servo_clipped);
+    last_servo_command_time_ = std::chrono::steady_clock::now();
+    servo_command_received_ = true;
+    if (servo_watchdog_active_) {
+      servo_watchdog_active_ = false;
+      RCLCPP_INFO(get_logger(), "Servo command stream recovered.");
+    }
     // publish clipped servo value as a "sensor"
     auto servo_sensor_msg = Float64();
     servo_sensor_msg.data = servo_clipped;
     servo_sensor_pub_->publish(servo_sensor_msg);
+  }
+}
+
+void VescDriver::checkCommandWatchdogs()
+{
+  const auto now = std::chrono::steady_clock::now();
+  const bool speed_expired = !speed_command_received_ ||
+    now - last_speed_command_time_ > command_timeout_;
+  if (speed_expired && !speed_watchdog_active_) {
+    speed_watchdog_active_ = true;
+    vesc_.setSpeed(0.0);
+    RCLCPP_WARN(get_logger(), "Motor command watchdog expired; commanding 0 ERPM.");
+  }
+
+  const bool servo_expired = !servo_command_received_ ||
+    now - last_servo_command_time_ > command_timeout_;
+  if (servo_expired && !servo_watchdog_active_) {
+    servo_watchdog_active_ = true;
+    const double servo_clipped = servo_limit_.clip(safe_servo_position_);
+    vesc_.setServo(servo_clipped);
+    auto servo_sensor_msg = Float64();
+    servo_sensor_msg.data = servo_clipped;
+    servo_sensor_pub_->publish(servo_sensor_msg);
+    RCLCPP_WARN(get_logger(), "Servo command watchdog expired; commanding safe centre.");
   }
 }
 

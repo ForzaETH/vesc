@@ -38,6 +38,7 @@
 #include <vesc_msgs/msg/vesc_state_stamped.hpp>
 #include <vesc_msgs/msg/vesc_imu.hpp>
 #include <vesc_msgs/msg/vesc_imu_stamped.hpp>
+#include <chrono>
 #include <experimental/optional>
 #include <memory>
 #include <string>
@@ -105,6 +106,16 @@ private:
   rclcpp::SubscriptionBase::SharedPtr servo_sub_;
   rclcpp::TimerBase::SharedPtr timer_;
 
+  // Final safety boundary for the command topics consumed by the hardware.
+  std::chrono::steady_clock::duration command_timeout_;
+  std::chrono::steady_clock::time_point last_speed_command_time_;
+  std::chrono::steady_clock::time_point last_servo_command_time_;
+  double safe_servo_position_;
+  bool speed_command_received_ = false;
+  bool servo_command_received_ = false;
+  bool speed_watchdog_active_ = false;
+  bool servo_watchdog_active_ = false;
+
   // driver modes (possible states)
   typedef enum
   {
@@ -125,6 +136,7 @@ private:
   void positionCallback(const Float64::SharedPtr position);
   void servoCallback(const Float64::SharedPtr servo);
   void speedCallback(const Float64::SharedPtr speed);
+  void checkCommandWatchdogs();
   void timerCallback();
 };
 

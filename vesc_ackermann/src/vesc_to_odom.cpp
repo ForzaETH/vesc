@@ -105,7 +105,10 @@ void VescToOdom::vescStateCallback(const VescStateStamped::SharedPtr state)
   }
 
   // convert to engineering units
-  double current_speed = (state->state.speed - speed_to_erpm_offset_) / speed_to_erpm_gain_;
+  // Mirror AckermannToVesc's explicit zero command: calibration offsets apply
+  // only while the motor is turning, not while the car is stopped.
+  double current_speed = state->state.speed == 0.0 ? 0.0 :
+    (state->state.speed - speed_to_erpm_offset_) / speed_to_erpm_gain_;
   if (std::fabs(current_speed) < 0.05) {
     current_speed = 0.0;
   }

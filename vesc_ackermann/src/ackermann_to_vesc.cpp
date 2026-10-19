@@ -71,7 +71,10 @@ void AckermannToVesc::ackermannCmdCallback(const AckermannDriveStamped::SharedPt
 {
   // calc vesc electric RPM (speed)
   Float64 erpm_msg;
-  erpm_msg.data = speed_to_erpm_gain_ * cmd->drive.speed + speed_to_erpm_offset_;
+  // Zero is the explicit safe motor command. Applying a calibration offset at
+  // standstill could otherwise make a stopped car receive a nonzero ERPM.
+  erpm_msg.data = cmd->drive.speed == 0.0 ? 0.0 :
+    speed_to_erpm_gain_ * cmd->drive.speed + speed_to_erpm_offset_;
 
   // calc steering angle (servo)
   Float64 servo_msg;

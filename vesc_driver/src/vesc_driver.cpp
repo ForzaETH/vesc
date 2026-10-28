@@ -70,11 +70,15 @@ VescDriver::VescDriver(const rclcpp::NodeOptions & options)
   std::string port = declare_parameter<std::string>("port", "");
   const double command_timeout = declare_parameter<double>("command_timeout", 0.2);
   safe_servo_position_ = declare_parameter<double>("steering_angle_to_servo_offset", 0.5);
+  const double imu_poll_period = declare_parameter<double>("imu_poll_period", 0.005);
   if (!std::isfinite(command_timeout) || command_timeout <= 0.0) {
     throw std::invalid_argument("command_timeout must be finite and positive");
   }
   if (!std::isfinite(safe_servo_position_)) {
     throw std::invalid_argument("steering_angle_to_servo_offset must be finite");
+  }
+  if (!std::isfinite(imu_poll_period) || imu_poll_period <= 0.0) {
+    throw std::invalid_argument("imu_poll_period must be finite and positive");
   }
   command_timeout_ = std::chrono::duration_cast<std::chrono::steady_clock::duration>(
     std::chrono::duration<double>(command_timeout));
@@ -116,6 +120,10 @@ VescDriver::VescDriver(const rclcpp::NodeOptions & options)
 
   // create a 50Hz timer, used for state machine & polling VESC telemetry
   timer_ = create_wall_timer(20ms, std::bind(&VescDriver::timerCallback, this));
+  // poll the IMU on its own, faster timer so telemetry stays at 50Hz
+  imu_timer_ = create_wall_timer(
+    std::chrono::duration<double>(imu_poll_period),
+    std::bind(&VescDriver::imuTimerCallback, this));
 }
 
 /* TODO or TO-THINKABOUT LIST
@@ -158,11 +166,17 @@ void VescDriver::timerCallback()
     checkCommandWatchdogs();
     // poll for vesc state (telemetry)
     vesc_.requestState();
-    // poll for vesc imu
-    vesc_.requestImuData();
   } else {
     // unknown mode, how did that happen?
     assert(false && "unknown driver mode");
+  }
+}
+
+void VescDriver::imuTimerCallback()
+{
+  // only poll once the main timer has confirmed the connection and firmware version
+  if (driver_mode_ == MODE_OPERATING && vesc_.isConnected()) {
+    vesc_.requestImuData();
   }
 }
 

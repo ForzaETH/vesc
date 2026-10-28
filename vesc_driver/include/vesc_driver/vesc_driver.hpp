@@ -105,6 +105,7 @@ private:
   rclcpp::SubscriptionBase::SharedPtr position_sub_;
   rclcpp::SubscriptionBase::SharedPtr servo_sub_;
   rclcpp::TimerBase::SharedPtr timer_;
+  rclcpp::TimerBase::SharedPtr imu_timer_;
 
   // Final safety boundary for the command topics consumed by the hardware.
   std::chrono::steady_clock::duration command_timeout_;
@@ -138,6 +139,7 @@ private:
   void speedCallback(const Float64::SharedPtr speed);
   void checkCommandWatchdogs();
   void timerCallback();
+  void imuTimerCallback();
 };
 
 }  // namespace vesc_driver

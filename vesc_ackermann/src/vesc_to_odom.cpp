@@ -166,8 +166,10 @@ void VescToOdom::vescStateCallback(const VescStateStamped::SharedPtr state)
   odom.twist.twist.linear.y = 0.0;
   odom.twist.twist.angular.z = current_angular_velocity;
 
-  // Velocity uncertainty
-  /** @todo Think about velocity uncertainty */
+  // Velocity uncertainty. robot_localization floors a variance of 0 to 1e-9 (absolute trust),
+  // so leaving this empty makes the EKF ignore every other velocity source.
+  odom.twist.covariance[0] = 0.05;   ///< vx, sigma ~0.2 m/s (measured against cartographer with a calibrated speed_to_erpm_gain)
+  odom.twist.covariance[35] = 0.05;  ///< yaw rate from the steering model
 
   if (publish_tf_) {
     TransformStamped tf;

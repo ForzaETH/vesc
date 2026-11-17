@@ -315,8 +315,10 @@ void VescDriver::dutyCycleCallback(const Float64::SharedPtr duty_cycle)
  */
 void VescDriver::currentCallback(const Float64::SharedPtr current)
 {
-  if (driver_mode_ == MODE_OPERATING) {
+  if (driver_mode_ == MODE_OPERATING && std::isfinite(current->data)) {
     vesc_.setCurrent(current_limit_.clip(current->data));
+    last_torque_command_time_ = std::chrono::steady_clock::now();
+    torque_command_active_ = true;
   }
 }
 
@@ -327,8 +329,10 @@ void VescDriver::currentCallback(const Float64::SharedPtr current)
  */
 void VescDriver::brakeCallback(const Float64::SharedPtr brake)
 {
-  if (driver_mode_ == MODE_OPERATING) {
+  if (driver_mode_ == MODE_OPERATING && std::isfinite(brake->data)) {
     vesc_.setBrake(brake_limit_.clip(brake->data));
+    last_torque_command_time_ = std::chrono::steady_clock::now();
+    torque_command_active_ = true;
   }
 }
 
@@ -396,6 +400,11 @@ void VescDriver::servoCallback(const Float64::SharedPtr servo)
 void VescDriver::checkCommandWatchdogs()
 {
   const auto now = std::chrono::steady_clock::now();
+  if (torque_command_active_ && now - last_torque_command_time_ > command_timeout_) {
+    torque_command_active_ = false;
+    vesc_.setSpeed(0.0);
+    RCLCPP_WARN(get_logger(), "Current command stream ended; commanding 0 ERPM.");
+  }
   const bool speed_expired = !speed_command_received_ ||
     now - last_speed_command_time_ > command_timeout_;
   if (speed_expired && !speed_watchdog_active_) {

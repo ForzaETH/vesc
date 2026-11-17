@@ -111,6 +111,9 @@ private:
   std::chrono::steady_clock::duration command_timeout_;
   std::chrono::steady_clock::time_point last_speed_command_time_;
   std::chrono::steady_clock::time_point last_servo_command_time_;
+  // Current and brake commands: the motor is stopped once their stream becomes stale.
+  std::chrono::steady_clock::time_point last_torque_command_time_;
+  bool torque_command_active_ = false;
   double safe_servo_position_;
   bool speed_command_received_ = false;
   bool servo_command_received_ = false;
